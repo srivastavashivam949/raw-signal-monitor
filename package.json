@@ -1,0 +1,16 @@
+{
+  "name": "raw-signal-monitor",
+  "version": "1.0.0",
+  "description": "Raw-fact defense signal monitor — no editorial sources",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "collect": "node collector.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.6.0",
+    "express": "^4.22.1",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^2.7.0"
+  }
+}

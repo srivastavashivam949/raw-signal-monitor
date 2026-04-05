@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raw Signal Monitor</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0b0d11;
+  --bg2:     #111318;
+  --bg3:     #181c24;
+  --border:  rgba(255,255,255,0.06);
+  --border2: rgba(255,255,255,0.11);
+  --text:    #dde1ea;
+  --text2:   #7a8394;
+  --text3:   #454d5e;
+  --green:   #1ca86e;
+  --amber:   #d48f18;
+  --orange:  #c85a20;
+  --red:     #c03535;
+  --blue:    #2e72c8;
+  --mono:    'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; min-height: 100vh; }
+.app { max-width: 1200px; margin: 0 auto; padding: 20px 16px; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo-text { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: 0.05em; }
+.logo-sub { font-size: 11px; color: var(--text3); margin-top: 1px; font-family: var(--mono); }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: blink 2s infinite; }
+.pulse.warn { background: var(--amber); }
+.pulse.dead { background: var(--text3); animation: none; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+.status-txt { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+.btn { padding: 5px 12px; font-size: 11px; font-family: var(--mono); border: 1px solid var(--border2); border-radius: 4px; background: transparent; color: var(--text2); cursor: pointer; }
+.btn:hover { background: var(--bg3); color: var(--text); }
+.btn:disabled { opacity: .3; cursor: not-allowed; }
+
+/* Source status bar */
+.source-bar { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.src-chip { display: flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 3px; font-family: var(--mono); font-size: 10px; }
+.src-dot { width: 5px; height: 5px; border-radius: 50%; }
+.src-name { color: var(--text2); }
+.src-count { color: var(--text3); }
+.src-anom { color: var(--amber); }
+
+/* Score card */
+.score-row { display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-bottom: 12px; }
+@media(max-width:600px){ .score-row { grid-template-columns: 1fr; } }
+.score-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+.score-label { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
+.score-value { font-size: 48px; font-family: var(--mono); font-weight: 700; line-height: 1; margin-bottom: 6px; }
+.score-basis { font-size: 11px; color: var(--text2); line-height: 1.6; }
+.bar-wrap { height: 3px; background: var(--bg3); border-radius: 2px; margin: 10px 0 6px; }
+.bar-fill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+
+/* Signals list */
+.signals-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.card-label { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+.signal-row { display: grid; grid-template-columns: 80px 80px 1fr 60px; gap: 8px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; }
+.signal-row:last-child { border-bottom: none; }
+.sig-source { color: var(--text3); }
+.sig-val { color: var(--text); }
+.sig-obs { color: var(--text2); line-height: 1.5; font-family: inherit; }
+.sig-pri { text-align: right; }
+.pri-high { color: var(--red); }
+.pri-med  { color: var(--amber); }
+.pri-low  { color: var(--green); }
+
+/* Co-occurrences */
+.cooc-row { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.cooc-row:last-child { border-bottom: none; }
+.cooc-sources { font-family: var(--mono); font-size: 10px; color: var(--amber); margin-bottom: 3px; }
+.cooc-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.cooc-region { font-size: 10px; color: var(--text3); margin-top: 2px; font-family: var(--mono); }
+
+/* Tabs */
+.tabs { display: flex; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.tab { padding: 7px 14px; font-size: 11px; font-family: var(--mono); border: none; background: none; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab.active { color: var(--text); border-bottom-color: var(--blue); }
+.tab:hover:not(.active) { color: var(--text2); }
+
+/* Event log */
+.event-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.filter-select { padding: 4px 8px; font-size: 11px; font-family: var(--mono); background: var(--bg2); border: 1px solid var(--border2); border-radius: 4px; color: var(--text2); }
+.anom-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: var(--mono); color: var(--text2); cursor: pointer; }
+.anom-toggle input { cursor: pointer; }
+
+.event-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+.event-table th { text-align: left; color: var(--text3); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border2); }
+.event-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.event-table tr:last-child td { border-bottom: none; }
+.event-table tr.has-anomaly td { background: rgba(200,90,32,.04); }
+.ev-source { color: var(--text3); white-space: nowrap; }
+.ev-time { color: var(--text3); white-space: nowrap; }
+.ev-val { color: var(--text); }
+.ev-meta { color: var(--text2); max-width: 300px; }
+.ev-anom { color: var(--amber); font-size: 10px; }
+.anom-badge { display: inline-block; padding: 1px 5px; background: rgba(212,143,24,.15); border: 1px solid rgba(212,143,24,.3); border-radius: 2px; color: var(--amber); font-size: 9px; }
+
+/* Baseline status */
+.baseline-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.baseline-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.bl-name { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.bl-status { font-size: 10px; font-family: var(--mono); }
+.bl-count { font-size: 10px; color: var(--text3); margin-top: 3px; }
+
+/* Data gaps */
+.gap-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-family: var(--mono); font-size: 11px; color: var(--text3); border-bottom: 1px solid var(--border); }
+.gap-item:last-child { border-bottom: none; }
+.gap-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text3); }
+
+/* Loading */
+.loading { text-align: center; padding: 40px; font-family: var(--mono); font-size: 12px; color: var(--text3); }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 1px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin .6s linear infinite; margin-right: 8px; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty { padding: 24px; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--text3); }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media(max-width:700px){ .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="header-left">
+      <div>
+        <div class="logo-text">RAW SIGNAL MONITOR</div>
+        <div class="logo-sub">SEISMIC · FIRMS · AIS · ADS-B · OIL · OFFICIAL · TENDER</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="pulse dead" id="pulse"></div>
+      <span class="status-txt" id="status-txt">initializing</span>
+      <button class="btn" id="collect-btn" onclick="triggerCollect()">collect now</button>
+      <button class="btn" id="analyze-btn" onclick="triggerAnalyze()">analyze</button>
+    </div>
+  </div>
+
+  <div class="source-bar" id="source-bar">
+    <div class="src-chip"><div class="src-dot" style="background:var(--text3)"></div><span class="src-name">loading...</span></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('overview',this)">overview</button>
+    <button class="tab" onclick="switchTab('events',this)">event log</button>
+    <button class="tab" onclick="switchTab('baselines',this)">baselines</button>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <div id="tab-overview">
+    <div id="ov-loading" class="loading"><span class="spinner"></span>waiting for first collection...</div>
+    <div id="ov-content" style="display:none">
+
+      <div class="score-row">
+        <div class="score-card">
+          <div class="score-label">composite anomaly score</div>
+          <div class="score-value" id="score-val" style="color:var(--green)">—</div>
+          <div class="bar-wrap"><div class="bar-fill" id="score-bar" style="width:0%;background:var(--green)"></div></div>
+          <div class="score-basis" id="score-basis">—</div>
+        </div>
+
+        <div class="two-col" style="margin-bottom:0">
+          <div class="signals-card">
+            <div class="card-label">co-occurrences <span id="cooc-count" style="color:var(--amber)"></span></div>
+            <div id="cooc-list"><div class="empty">none detected</div></div>
+          </div>
+          <div class="signals-card">
+            <div class="card-label">baseline status</div>
+            <div id="baseline-status-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="signals-card" style="margin-bottom:12px">
+        <div class="card-label">significant signals <span id="sig-count" style="color:var(--text3)"></span></div>
+        <div class="signal-row" style="font-size:10px;color:var(--text3);padding-bottom:6px;">
+          <span>SOURCE</span><span>VALUE</span><span>OBSERVATION</span><span style="text-align:right">PRIORITY</span>
+        </div>
+        <div id="signals-list"><div class="empty">no significant signals</div></div>
+      </div>
+
+      <div class="signals-card">
+        <div class="card-label">data gaps — blind spots</div>
+        <div id="gaps-list"><div class="empty">loading...</div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- EVENTS TAB -->
+  <div id="tab-events" style="display:none">
+    <div class="event-filters">
+      <select class="filter-select" id="src-filter" onchange="loadEvents()">
+        <option value="">all sources</option>
+        <option value="SEISMIC">SEISMIC</option>
+        <option value="FIRMS">FIRMS</option>
+        <option value="OIL">OIL</option>
+        <option value="ADSB">ADSB</option>
+        <option value="AIS">AIS</option>
+        <option value="OFFICIAL">OFFICIAL</option>
+        <option value="TENDER">TENDER</option>
+      </select>
+      <select class="filter-select" id="hours-filter" onchange="loadEvents()">
+        <option value="24">last 24h</option>
+        <option value="48">last 48h</option>
+        <option value="72" selected>last 72h</option>
+      </select>
+      <label class="anom-toggle">
+        <input type="checkbox" id="anom-filter" onchange="loadEvents()">
+        anomalies only
+      </label>
+      <span style="font-size:11px;color:var(--text3);font-family:var(--mono)" id="ev-count"></span>
+    </div>
+    <div class="signals-card">
+      <div id="event-table-wrap"><div class="loading"><span class="spinner"></span>loading events...</div></div>
+    </div>
+  </div>
+
+  <!-- BASELINES TAB -->
+  <div id="tab-baselines" style="display:none">
+    <div style="margin-bottom:12px;font-size:12px;color:var(--text2);line-height:1.7">
+      Baselines are rolling 7-day statistical means computed from your own collected data.
+      Anomaly detection triggers at &gt;2 standard deviations from baseline.
+      A source needs at least 12 samples before anomaly detection activates.
+    </div>
+    <div class="signals-card">
+      <div class="card-label" style="margin-bottom:12px">source baselines</div>
+      <div id="baselines-detail"><div class="loading"><span class="spinner"></span>loading...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const scoreColors = { 0:['var(--green)',0], 30:['var(--amber)',30], 60:['var(--orange)',60], 80:['var(--red)',80] };
+function scoreColor(v) {
+  if (v >= 80) return 'var(--red)';
+  if (v >= 60) return 'var(--orange)';
+  if (v >= 30) return 'var(--amber)';
+  return 'var(--green)';
+}
+function relTime(ts) {
+  if (!ts) return '—';
+  const h = Math.floor((Date.now()-ts)/3600000);
+  if (h < 1) return 'just now';
+  if (h < 24) return h+'h ago';
+  return Math.floor(h/24)+'d ago';
+}
+function fmtTime(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toISOString().replace('T',' ').slice(0,16)+'Z';
+}
+function setStatus(state, msg) {
+  const p = document.getElementById('pulse');
+  const t = document.getElementById('status-txt');
+  p.className = 'pulse' + (state==='ok'?'':state==='warn'?' warn':' dead');
+  t.textContent = msg;
+}
+
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const status = await res.json();
+    const bar = document.getElementById('source-bar');
+    bar.innerHTML = Object.entries(status).map(([src, s]) => `
+      <div class="src-chip">
+        <div class="src-dot" style="background:${s.ok?'var(--green)':'var(--text3)'}"></div>
+        <span class="src-name">${src}</span>
+        <span class="src-count">${s.count}</span>
+        ${s.anomalies ? `<span class="src-anom">⚑${s.anomalies}</span>` : ''}
+      </div>`).join('');
+    const anyOk = Object.values(status).some(s => s.ok);
+    setStatus(anyOk ? 'ok' : 'warn', anyOk ? 'collecting' : 'no data yet');
+  } catch(e) { setStatus('dead', 'server error'); }
+}
+
+async function loadDigest() {
+  try {
+    const res = await fetch('/api/digest');
+    const d = await res.json();
+    if (d.error || !d.composite_anomaly_score) {
+      document.getElementById('ov-loading').style.display = '';
+      document.getElementById('ov-content').style.display = 'none';
+      document.getElementById('ov-loading').innerHTML = `<span style="color:var(--text3);font-family:var(--mono);font-size:12px">${d.error || 'Collecting data — first analysis runs after sufficient events are gathered'}</span>`;
+      return;
+    }
+    document.getElementById('ov-loading').style.display = 'none';
+    document.getElementById('ov-content').style.display = '';
+
+    const score = d.composite_anomaly_score || 0;
+    const color = scoreColor(score);
+    document.getElementById('score-val').textContent = score;
+    document.getElementById('score-val').style.color = color;
+    document.getElementById('score-bar').style.width = score + '%';
+    document.getElementById('score-bar').style.background = color;
+    document.getElementById('score-basis').textContent = d.score_basis || '—';
+
+    // Significant signals
+    const sigs = d.significant_signals || [];
+    document.getElementById('sig-count').textContent = `(${sigs.length})`;
+    const sigEl = document.getElementById('signals-list');
+    sigEl.innerHTML = sigs.length ? sigs.map(s => `
+      <div class="signal-row">
+        <span class="sig-source">${s.source}</span>
+        <span class="sig-val">${s.value} <span style="color:var(--text3);font-size:9px">${s.unit||''}</span></span>
+        <span class="sig-obs">${s.observation}<br><span style="color:var(--text3);font-size:10px">${s.deviation||''}</span></span>
+        <span class="sig-pri pri-${(s.priority||'low').toLowerCase()}">${s.priority}</span>
+      </div>`).join('') : '<div class="empty">no significant deviations from baseline</div>';
+
+    // Co-occurrences
+    const coocs = d.co_occurrences || [];
+    document.getElementById('cooc-count').textContent = coocs.length ? `(${coocs.length})` : '';
+    const coocEl = document.getElementById('cooc-list');
+    coocEl.innerHTML = coocs.length ? coocs.map(c => `
+      <div class="cooc-row">
+        <div class="cooc-sources">${c.sources.join(' + ')}</div>
+        <div class="cooc-desc">${c.description}</div>
+        ${c.region ? `<div class="cooc-region">${c.region}</div>` : ''}
+      </div>`).join('') : '<div class="empty">none</div>';
+
+    // Baseline status inline
+    const bl = d.baseline_status || {};
+    const statusColors = { normal:'var(--green)', elevated:'var(--amber)', insufficient_data:'var(--text3)' };
+    document.getElementById('baseline-status-list').innerHTML = Object.entries(bl).map(([src, status]) => `
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;">
+        <span style="color:var(--text2)">${src}</span>
+        <span style="color:${statusColors[status]||'var(--text3)'}">${status}</span>
+      </div>`).join('');
+
+    // Data gaps
+    const gaps = d.data_gaps || [];
+    document.getElementById('gaps-list').innerHTML = gaps.length
+      ? gaps.map(g => `<div class="gap-item"><div class="gap-dot"></div>${g}</div>`).join('')
+      : '<div class="empty">no gaps identified</div>';
+
+  } catch(e) { console.error(e); }
+}
+
+async function loadEvents() {
+  const src = document.getElementById('src-filter').value;
+  const hours = document.getElementById('hours-filter').value;
+  const anomOnly = document.getElementById('anom-filter').checked;
+  const params = new URLSearchParams({ hours, ...(src ? {source:src} : {}), ...(anomOnly ? {anomalyOnly:'true'} : {}) });
+  const wrap = document.getElementById('event-table-wrap');
+  wrap.innerHTML = '<div class="loading"><span class="spinner"></span>loading...</div>';
+  try {
+    const res = await fetch('/api/events?' + params);
+    const { events, count } = await res.json();
+    document.getElementById('ev-count').textContent = `${count} events`;
+    if (!events.length) { wrap.innerHTML = '<div class="empty">no events found</div>'; return; }
+    wrap.innerHTML = `<table class="event-table">
+      <thead><tr>
+        <th>source</th><th>time</th><th>type</th><th>value</th><th>location/meta</th><th>anomaly</th>
+      </tr></thead>
+      <tbody>${events.slice().reverse().map(e => `
+        <tr class="${e.anomaly?'has-anomaly':''}">
+          <td class="ev-source">${e.source}</td>
+          <td class="ev-time">${fmtTime(e.ts)}</td>
+          <td style="color:var(--text2);font-family:var(--mono);font-size:10px">${e.type}</td>
+          <td class="ev-val">${e.value} <span style="color:var(--text3);font-size:9px">${e.unit||''}</span></td>
+          <td class="ev-meta" style="font-size:10px">${e.meta?.place||e.meta?.zone||e.meta?.country||e.meta?.source||e.meta?.title?.slice(0,60)||'—'}</td>
+          <td class="ev-anom">${e.anomaly ? `<span class="anom-badge">score ${e.anomaly.score}</span><br><span style="font-size:9px;color:var(--text3)">${e.anomaly.reason?.slice(0,80)||''}</span>` : ''}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  } catch(e) { wrap.innerHTML = '<div class="empty">error loading events</div>'; }
+}
+
+async function loadBaselines() {
+  // Show live baseline status from status endpoint
+  try {
+    const res = await fetch('/api/status');
+    const status = await res.json();
+    document.getElementById('baselines-detail').innerHTML = `
+      <table class="event-table">
+        <thead><tr><th>source</th><th>events (24h)</th><th>anomalies</th><th>last event</th><th>detection active</th></tr></thead>
+        <tbody>${Object.entries(status).map(([src, s]) => `
+          <tr>
+            <td style="font-family:var(--mono);color:var(--text)">${src}</td>
+            <td style="font-family:var(--mono);color:var(--text2)">${s.count}</td>
+            <td style="font-family:var(--mono);color:${s.anomalies?'var(--amber)':'var(--text3)'}">${s.anomalies||0}</td>
+            <td style="font-family:var(--mono);color:var(--text3)">${relTime(s.lastTs)}</td>
+            <td style="font-family:var(--mono);color:${s.count>=12?'var(--green)':'var(--text3)'}">${s.count>=12?'yes':'need '+(12-s.count)+' more'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:12px;font-size:11px;color:var(--text3);font-family:var(--mono);line-height:1.8">
+        Anomaly detection uses z-score &gt; 2.0 (2 standard deviations).<br>
+        Baselines build over 7 days. Seismic and FIRMS use event-specific rules (depth/magnitude, FRP threshold).
+      </div>`;
+  } catch(e) {}
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['overview','events','baselines'].forEach(t => document.getElementById('tab-'+t).style.display = t===tab?'':'none');
+  if (tab==='events') loadEvents();
+  if (tab==='baselines') loadBaselines();
+}
+
+async function triggerCollect() {
+  const btn = document.getElementById('collect-btn');
+  btn.disabled = true; btn.textContent = 'collecting...';
+  try { await fetch('/api/collect', {method:'POST'}); }
+  catch(e){}
+  setTimeout(() => { btn.disabled=false; btn.textContent='collect now'; refresh(); }, 15000);
+}
+
+async function triggerAnalyze() {
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = true; btn.textContent = 'analyzing...';
+  try {
+    await fetch('/api/analyze', {method:'POST'});
+    await loadDigest();
+  } catch(e){}
+  btn.disabled=false; btn.textContent='analyze';
+}
+
+async function refresh() {
+  await loadStatus();
+  await loadDigest();
+}
+
+// Auto-refresh every 2 minutes
+refresh();
+setInterval(refresh, 120000);
+</script>
+</body>
+</html>
