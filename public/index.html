@@ -254,7 +254,11 @@ function relTime(ts) {
 }
 function fmtTime(ts) {
   if (!ts) return '—';
-  return new Date(ts).toISOString().replace('T',' ').slice(0,16)+'Z';
+  return new Date(ts).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).replace(',', '') + ' IST';
 }
 function setStatus(state, msg) {
   const p = document.getElementById('pulse');
@@ -385,7 +389,7 @@ async function loadBaselines() {
             <td style="font-family:var(--mono);color:var(--text2)">${s.count}</td>
             <td style="font-family:var(--mono);color:${s.anomalies?'var(--amber)':'var(--text3)'}">${s.anomalies||0}</td>
             <td style="font-family:var(--mono);color:var(--text3)">${relTime(s.lastTs)}</td>
-            <td style="font-family:var(--mono);color:${s.count>=12?'var(--green)':'var(--text3)'}">${s.count>=12?'yes':'need '+(12-s.count)+' more'}</td>
+            <td style="font-family:var(--mono);color:${s.detectionActive?'var(--green)':'var(--text3)'}">${s.detectionActive?'yes':s.detectionApplicable===false?'—':'no baseline yet'}</td>
           </tr>`).join('')}
         </tbody>
       </table>
